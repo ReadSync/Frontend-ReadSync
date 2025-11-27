@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Stack_Sans_Text } from 'next/font/google'
+
+
+const stackSansText = Stack_Sans_Text({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  variable: '--font-stack-sans-text',
+})
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,6 +25,7 @@ export const metadata: Metadata = {
   title: "ReadSync",
   description: "ReadSync ASS",
 };
+
 
 export default function RootLayout({
   children,
