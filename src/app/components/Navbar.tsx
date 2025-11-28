@@ -61,8 +61,8 @@ const Navbar = () => {
 
         <ul className="hidden md:flex space-x-8 text-sm font-medium text-gray-700">
           <li><a className="hover:text-green-700 transition cursor-pointer">Dashboard</a></li>
-          <li><a className="hover:text-green-700 transition cursor-pointer">Question Bank</a></li>
-          <li><a className="hover:text-green-700 transition cursor-pointer">Resources</a></li>
+          <li><a className="hover:text-green-700 transition cursor-pointer">Discussion</a></li>
+          <li><a className="hover:text-green-700 transition cursor-pointer">Blog</a></li>
         </ul>
 
         <div className="hidden md:flex gap-3">
@@ -127,7 +127,7 @@ const Navbar = () => {
                 className="block py-2 text-gray-700 hover:text-green-700 transition cursor-pointer" 
                 onClick={closeMobileMenu}
               >
-                Question Bank
+                Discussion
               </a>
             </li>
             <li>
@@ -135,7 +135,7 @@ const Navbar = () => {
                 className="block py-2 text-gray-700 hover:text-green-700 transition cursor-pointer" 
                 onClick={closeMobileMenu}
               >
-                Resources
+                Blog
               </a>
             </li>
           </ul>
