@@ -3,7 +3,6 @@ import NextAuth from "next-auth";
 import { getUserByEmail } from "../../../lib/action";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from 'bcryptjs';
-import { a } from 'framer-motion/client';
 
 export const authOptions: any = {
   pages: {
@@ -13,65 +12,75 @@ export const authOptions: any = {
 
   providers: [
     CredentialsProvider({
-        name: "Credentials",
-        credentials: {
-            email: { label: "Email", type: "text", placeholder: "Enter your email" },
-            password: { label: "Password", type: "password", placeholder: "Enter your password" }
-        },
-        async authorize(credentials) {
-            try {
-                if (!credentials?.email || !credentials?.password) {
-                    throw new Error("All fields are required");
-                }
+      name: "Credentials",
+      credentials: {
+        email: { label: "Email", type: "text", placeholder: "Enter your email" },
+        password: { label: "Password", type: "password", placeholder: "Enter your password" }
+      },
 
-                const user = await getUserByEmail(credentials.email);
+      async authorize(credentials) {
+        try {
+          if (!credentials?.email || !credentials?.password) {
+            throw new Error("All fields are required");
+          }
 
-                if (!user) {
-                    throw new Error("Email tidak ditemukan");
-                }
+          const user = await getUserByEmail(credentials.email);
 
-                const isValid = await bcrypt.compare(credentials.password, user.password);
+          if (!user) throw new Error("Email tidak ditemukan");
 
-                if (!isValid) {
-                    throw new Error("Password salah");
-                }
+          const isValid = await bcrypt.compare(credentials.password, user.password);
+          if (!isValid) throw new Error("Password salah");
 
-                return {
-                    id: user.id.toString(),
-                    name: user.name,
-                    email: user.email,
-                    nisn: user.nisn,
-                    role: user.role,
-                };
-            } catch (error: any) {
-                console.error("Auth error:");
-                throw new Error("Authentication failed");
-            }
-        },
+          return {
+            id: user.id.toString(),
+            name: user.name,
+            email: user.email,
+            nisn: user.nisn,
+            role: user.role,
+            class_id: user.class_id,
+            major_id: user.major_id,
+            class_name: user.class_name,
+            major_name: user.major_name,
+          };
+        } catch (error) {
+          console.error("Auth error:", error);
+          throw new Error("Authentication failed");
+        }
+      },
     }),
   ],
 
   callbacks: {
     async jwt({ token, user }: any) {
-        if (user) {
-            token.id = user.id;
-            token.role = user.role;
-            token.email = user.email;
-        }
-        return token;
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        token.email = user.email;
+        token.nisn = user.nisn;
+        token.class_id = user.class_id;
+        token.major_id = user.major_id;
+        token.class_name = user.class_name;
+        token.major_name = user.major_name;
+      }
+      return token;
     },
 
     async session({ session, token }: any) {
-      session.user.id = token.id as string;
-      session.user.role = token.role as string;
-      session.user.nisn = token.nisn as string;
+      session.user.id = token.id;
+      session.user.role = token.role;
+      session.user.email = token.email;
+      session.user.nisn = token.nisn;
+      session.user.class_id = token.class_id;
+      session.user.major_id = token.major_id;
+      session.user.class_name = token.class_name;
+      session.user.major_name = token.major_name;
       return session;
     },
   },
 
   session: {
-    strategy: "jwt" as const,
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60,
   },
 
   secret: process.env.NEXTAUTH_SECRET || "fallback-secret",
