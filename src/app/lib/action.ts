@@ -22,31 +22,32 @@ export const userData = async (formData: FormData) => {
     if (!email || !nisn || !name || !password || !classId || !majorId) {
         return { error: "All fields are required" };
     }
-    
+
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { error: "Email invalid" };
+        return { error: "Email invalid" };
     }
 
     if (!/^\d+$/.test(nisn)) {
         return { error: "NISN harus berupa angka" };
     }
+
     const finalClassId = classId && classId !== "" ? parseInt(classId as string) : null;
     const finalMajorId = majorId && majorId !== "" ? parseInt(majorId as string) : null;
 
     await connection.execute(`INSERT INTO users (nisn, name, password, role, class_id, major_id, email)
          VALUES (?, ?, ?, 'siswa', ?, ?, ?)`, [nisn, name, bcryptPassword, finalClassId, finalMajorId, email]);
+
     return { success: true, message: "Registered successfully" };
     } catch (error: any) {
     console.error("Register error details:", error);
-    
+
     if (error.code === 'ER_DUP_ENTRY') {
       return { error: "NISN sudah terdaftar" };
     }
-    
+
     return { error: "Error during registration"};
   }
 };
-
 
 // Major and Class validation
 export async function getClasses() {
@@ -70,7 +71,7 @@ export async function getMajors() {
 }
 
 // Login system
-export  default async function loginUser(formData: FormData) {
+export default async function loginUser(formData: FormData) {
   try {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
@@ -85,19 +86,19 @@ export  default async function loginUser(formData: FormData) {
     if (emailRows.length === 0) {
       return { error: "Email not registered" };
     }
-    
+
     const user = emailRows[0];
-    const isPasswordValid = await bcrypt.compare(password, user.bcryptPassword);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       return { error: "Incorrect password" };
     }
 
-    // Making JWT 
+    // Making JWT
     const token = jwt.sign(
-      { 
-        id: user.id, 
-        nisn: user.nisn, 
+      {
+        id: user.id,
+        nisn: user.nisn,
         name: user.name,
         role: user.role,
         email: user.email
@@ -106,7 +107,7 @@ export  default async function loginUser(formData: FormData) {
       { expiresIn: "7d" }
     );
 
-       // Set cookie
+    // Set cookie
     const cookieStore = await cookies();
     cookieStore.set("token", token, {
       httpOnly: true,
@@ -116,7 +117,7 @@ export  default async function loginUser(formData: FormData) {
     });
 
     return {
-      success: true, 
+      success: true,
       user: {
         id: user.id,
         nisn: user.nisn,
@@ -137,11 +138,12 @@ export async function getUserByEmail(email: string) {
       "SELECT id, nisn, name, password, role, class_id, major_id, email FROM users WHERE email = ?",
       [email]
     );
-      if (getUserByEmailrows.length === 0) return null;
+
+    if (getUserByEmailrows.length === 0) return null;
+
     return getUserByEmailrows[0];
   } catch (error) {
     console.error("Get user error:", error);
     return null;
   }
 }
-

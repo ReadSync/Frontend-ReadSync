@@ -22,8 +22,8 @@ const item = {
     opacity: 1,
     y: 0,
     filter: "blur(0px)",
-    transition: { 
-      duration: 0.8, 
+    transition: {
+      duration: 0.8,
       ease: [0.34, 1.56, 0.64, 1]
     },
   },
@@ -31,14 +31,14 @@ const item = {
 
 const DashboardUi = () => {
   return (
-    <motion.section 
+    <motion.section
       variants={container}
       initial="hidden"
       animate="show"
       className="relative w-full flex justify-center items-center py-16 sm:py-20 md:py-28 px-4 overflow-hidden"
     >
       <div className="w-full max-w-md sm:max-w-lg md:max-w-2xl">
-        <motion.div 
+        <motion.div
           variants={item}
           className="relative bg-white rounded-2xl shadow-2xl p-5 sm:p-6 md:p-10 border border-gray-200"
         >
@@ -62,7 +62,7 @@ const DashboardUi = () => {
               1560 <span className="text-gray-500 text-sm sm:text-base">Scores</span>
             </p>
             <div className="h-3 sm:h-4 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
-              <motion.div 
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: "80%" }}
                 transition={{ delay: 0.5, duration: 1.2, ease: "easeOut" }}
@@ -78,7 +78,7 @@ const DashboardUi = () => {
               1066 <span className="text-gray-500 text-sm sm:text-base">Scores</span>
             </p>
             <div className="h-3 sm:h-4 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
-              <motion.div 
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: "50%" }}
                 transition={{ delay: 0.7, duration: 1.2, ease: "easeOut" }}

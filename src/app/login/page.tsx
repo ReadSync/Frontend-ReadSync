@@ -46,7 +46,7 @@ const formVariants = {
   }
 }
 
-// System login 
+// System login
 const Login = () => {
   const passwordToggle = usePasswordToggle();
   const router = useRouter();
@@ -61,42 +61,47 @@ const Login = () => {
         email: formData.get("email")?.toString(),
         password: formData.get("password")?.toString(),
       });
-      
-    if (responese?.error) {
+
+      if (responese?.error) {
         alert("Login failed: " + responese.error);
         return;
-      } 
-        if (responese?.ok) {
-        router.push("/home"); 
+      }
+
+      if (responese?.ok) {
+        router.push("/home");
         router.refresh();
       }
-    }catch (error) {
+    } catch (error) {
       alert("An error occurred during login.");
     } finally {
       setIsLoading(false);
     }
-  } 
+  }
 
   return (
     <>
       <Navbar />
-       <motion.main 
-                initial="hidden"
-                animate="visible"
-                variants={containerVariants}
-                className="flex items-center justify-center pt-38 md:pt-48 px-4">
+      <motion.main
+        initial="hidden"
+        animate="visible"
+        variants={containerVariants}
+        className="flex items-center justify-center pt-38 md:pt-48 px-4">
         <motion.div variants={itemVariants} className="w-full max-w-2xl">
           <div className='text-center mb-8'>
-             <h1 className={`${inter.className} font-bold leading-tight text-3xl md:text-4xl mb-2`}>Login</h1>
+            <h1 className={`${inter.className} font-bold leading-tight text-3xl md:text-4xl mb-2`}>Login</h1>
           </div>
           <motion.form
-            action={handleLogin}
-                        variants={formVariants}
-                        className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 md:p-8">
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              handleLogin(formData);
+            }}
+            variants={formVariants}
+            className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 md:p-8">
             <motion.div variants={containerVariants} className='mb-6'>
               <label className='block text-gray-700 mb-2' htmlFor='email'>Email</label>
               <input
-               name="email"
+                name="email"
                 type='email'
                 id='email'
                 className='w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all'
@@ -106,7 +111,7 @@ const Login = () => {
             <motion.div variants={containerVariants} className='mb-6 relative'>
               <label className='block text-gray-700 mb-2' htmlFor='password'>Password</label>
               <input
-                name="password" 
+                name="password"
                 type={passwordToggle.InputType}
                 id='password'
                 className='w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all pr-12'
@@ -124,14 +129,14 @@ const Login = () => {
                 />
               </button>
             </motion.div>
-            <Button 
-            type = "submit"
-             disabled={isLoading}
-             className="w-full h-12 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold transition-all disabled:opacity-50">
-               {isLoading ? "Memproses..." : "Login"}
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="w-full h-12 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold transition-all disabled:opacity-50">
+              {isLoading ? "Memproses..." : "Login"}
             </Button>
           </motion.form>
-          
+
           <div className="text-center mt-6">
             <p className="text-gray-600">
               Don't have an account?{' '}

@@ -10,7 +10,7 @@ export const authOptions: any = {
     signIn: "/login",
     error: "/login",
   },
-  
+
   providers: [
     CredentialsProvider({
         name: "Credentials",
@@ -24,32 +24,35 @@ export const authOptions: any = {
                     throw new Error("All fields are required");
                 }
 
-          const user = await getUserByEmail(credentials.email);
-          if (!user) {
-            throw new Error("Email tidak ditemukan");
-          }
+                const user = await getUserByEmail(credentials.email);
 
-          const isValid = await bcrypt.compare(credentials.password, user.password);
-          if (!isValid) {
-            throw new Error("Password salah");
-          }
-    return {
-            id: user.id.toString(),
-            name: user.name,
-            email: user.email,
-            nisn: user.nisn,
-            role: user.role,
-          };
-        } catch (error: any) {
-          console.error("Auth error:");
-          throw new Error("Authentication failed");
-        }
-      },
+                if (!user) {
+                    throw new Error("Email tidak ditemukan");
+                }
+
+                const isValid = await bcrypt.compare(credentials.password, user.password);
+
+                if (!isValid) {
+                    throw new Error("Password salah");
+                }
+
+                return {
+                    id: user.id.toString(),
+                    name: user.name,
+                    email: user.email,
+                    nisn: user.nisn,
+                    role: user.role,
+                };
+            } catch (error: any) {
+                console.error("Auth error:");
+                throw new Error("Authentication failed");
+            }
+        },
     }),
   ],
 
   callbacks: {
-    async jwt({ token, user}: any) {
+    async jwt({ token, user }: any) {
         if (user) {
             token.id = user.id;
             token.role = user.role;
@@ -57,14 +60,14 @@ export const authOptions: any = {
         }
         return token;
     },
-     async session({ session, token }: any) {
+
+    async session({ session, token }: any) {
       session.user.id = token.id as string;
       session.user.role = token.role as string;
       session.user.nisn = token.nisn as string;
       return session;
     },
   },
-
 
   session: {
     strategy: "jwt" as const,
