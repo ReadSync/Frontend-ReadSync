@@ -2,7 +2,6 @@
 import React from 'react'
 import connection from "./database";
 import bcrypt from 'bcryptjs';
-import { em } from 'framer-motion/client';
 import * as jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 

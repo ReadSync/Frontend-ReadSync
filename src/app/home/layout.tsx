@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../api/auth/[...nextauth]/route'
 import Sidebar from '../components/Sidebar'
 import Navbar2 from '../components/Navbar2'
+import { redirect } from 'next/navigation' // ✅ PERBAIKI INI
 
 export default async function HomeLayout({
   children,
@@ -10,7 +11,15 @@ export default async function HomeLayout({
 }) {
   const session = await getServerSession(authOptions)
 
-    console.log("📦 SESSION DI LAYOUT:", session)
+  console.log("🔍 SESSION DI HOME LAYOUT:", session)
+
+  if (session && session.user?.role === 'petugas') {
+    redirect('/petugas/dashboard')  
+  }
+  
+  if (session && session.user?.role === 'admin') {
+    redirect('/admin/dashboard')  
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
