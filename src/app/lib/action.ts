@@ -4,11 +4,14 @@ import connection from "./database";
 import bcrypt from 'bcryptjs';
 import * as jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../api/auth/[...nextauth]/route";
 
 const JWT_SECRET = process.env.JWT_SECRET || "default_secret";
 
+// =========== REGISTRATION ===========
 export const userData = async (formData: FormData) => {
-    try {
+  try {
     const email = formData.get("email") as string;
     const nisn = formData.get("nisn") as string;
     const name = formData.get("name") as string;
@@ -19,15 +22,15 @@ export const userData = async (formData: FormData) => {
     const bcryptPassword = await bcrypt.hash(password, 12);
 
     if (!email || !nisn || !name || !password || !classId || !majorId) {
-        return { error: "All fields are required" };
+      return { error: "All fields are required" };
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return { error: "Email invalid" };
+      return { error: "Email invalid" };
     }
 
     if (!/^\d+$/.test(nisn)) {
-        return { error: "NISN harus berupa angka" };
+      return { error: "NISN harus berupa angka" };
     }
 
     const finalClassId = classId && classId !== "" ? parseInt(classId as string) : null;
@@ -37,18 +40,18 @@ export const userData = async (formData: FormData) => {
          VALUES (?, ?, ?, 'siswa', ?, ?, ?)`, [nisn, name, bcryptPassword, finalClassId, finalMajorId, email]);
 
     return { success: true, message: "Registered successfully" };
-    } catch (error: any) {
+  } catch (error: any) {
     console.error("Register error details:", error);
 
     if (error.code === 'ER_DUP_ENTRY') {
       return { error: "NISN sudah terdaftar" };
     }
 
-    return { error: "Error during registration"};
+    return { error: "Error during registration" };
   }
 };
 
-// Major and Class validation
+// =========== GET CLASSES & MAJORS ===========
 export async function getClasses() {
   try {
     const [classes]: any = await connection.execute("SELECT * FROM class");
@@ -69,7 +72,7 @@ export async function getMajors() {
   }
 }
 
-// Login system
+// =========== LOGIN SYSTEM ===========
 export default async function loginUser(formData: FormData) {
   try {
     const email = formData.get("email") as string;
@@ -144,5 +147,440 @@ export async function getUserByEmail(email: string) {
   } catch (error) {
     console.error("Get user error:", error);
     return null;
+  }
+}
+
+// =========== BORROW BOOK SYSTEM ===========
+// Helper function untuk mendapatkan user dari cookie token
+// Di file actions.ts - UPDATE fungsi getCurrentUserFromToken
+async function getCurrentUserFromToken() {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("token")?.value;
+
+    console.log('🔐 Token from cookie:', token ? 'Exists' : 'NOT FOUND');
+
+    if (!token) {
+      console.log('❌ No token found in cookies');
+      return null;
+    }
+
+    // Debug: Lihat token
+    console.log('Token value (first 20 chars):', token.substring(0, 20) + '...');
+
+    const decoded: any = jwt.verify(token, JWT_SECRET);
+
+    console.log('✅ Decoded user from token:', {
+      id: decoded.id,
+      name: decoded.name,
+      email: decoded.email
+    });
+
+    return {
+      id: decoded.id,
+      nisn: decoded.nisn,
+      name: decoded.name,
+      role: decoded.role,
+      email: decoded.email
+    };
+  } catch (error: any) {
+    console.error("❌ Error verifying token:", error.message);
+
+    // Jika token expired/invalid, hapus cookie
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      console.log('⚠️ Token invalid/expired, clearing cookie...');
+      const cookieStore = await cookies();
+      cookieStore.set("token", "", {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        path: "/",
+        maxAge: 0, // Expire immediately
+      });
+    }
+
+    return null;
+  }
+}
+
+// 1. ACTION UNTUK MEMINJAM BUKU (CREATE BORROW)
+export async function createBorrow(bookId: number) {
+  try {
+    console.log('🔄 [ACTION] Creating borrow for book:', bookId);
+
+    // Ambil user dari NextAuth session
+    const session = await getServerSession(authOptions);
+
+    if (!session || !session.user || !session.user.id) {
+      return {
+        success: false,
+        error: 'Silakan login terlebih dahulu'
+      };
+    }
+
+    const userId = parseInt(session.user.id);
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'User ID tidak ditemukan'
+      };
+    }
+
+    console.log('📋 [ACTION] User ID:', userId, 'Book ID:', bookId);
+
+    // 1. Cek apakah buku tersedia
+    const [bookRows]: any = await connection.execute(
+      "SELECT id, available_quantity, title FROM books WHERE id = ?",
+      [bookId]
+    );
+
+    if (bookRows.length === 0) {
+      return {
+        success: false,
+        error: 'Buku tidak ditemukan'
+      };
+    }
+
+    const book = bookRows[0];
+
+    if (book.available_quantity <= 0) {
+      return {
+        success: false,
+        error: `Buku "${book.title}" sedang tidak tersedia`
+      };
+    }
+
+    // 2. Cek apakah user sudah meminjam buku yang sama dan belum dikembalikan
+    const [existingBorrow]: any = await connection.execute(
+      `SELECT id FROM borrows
+       WHERE user_id = ? AND book_id = ? AND return_date IS NULL
+       AND status IN ('pending', 'approved')`,
+      [userId, bookId]
+    );
+
+    if (existingBorrow.length > 0) {
+      return {
+        success: false,
+        error: 'Anda sudah meminjam buku ini dan belum mengembalikannya'
+      };
+    }
+
+    // 3. Insert ke table borrows dengan status 'pending'
+    const [result]: any = await connection.execute(
+      `INSERT INTO borrows (user_id, book_id, status, borrow_date)
+       VALUES (?, ?, 'pending', NOW())`,
+      [userId, bookId]
+    );
+
+    const borrowId = result.insertId;
+
+    // 4. Kurangi stok buku yang tersedia
+    await connection.execute(
+      "UPDATE books SET available_quantity = available_quantity - 1 WHERE id = ?",
+      [bookId]
+    );
+
+    // 5. Ambil data borrow yang baru dibuat
+    const [newBorrow]: any = await connection.execute(
+      `SELECT b.*, bk.title as book_title
+       FROM borrows b
+       JOIN books bk ON b.book_id = bk.id
+       WHERE b.id = ?`,
+      [borrowId]
+    );
+
+    console.log('✅ [ACTION] Borrow created successfully. ID:', borrowId);
+
+    return {
+      success: true,
+      message: 'Permintaan peminjaman berhasil diajukan. Menunggu persetujuan admin.',
+      data: newBorrow[0]
+    };
+
+  } catch (error: any) {
+    console.error('❌ [ACTION] Error creating borrow:', error);
+    return {
+      success: false,
+      error: error.message || 'Terjadi kesalahan server'
+    };
+  }
+}
+
+// 2. ACTION UNTUK MENDAPATKAN DAFTAR PINJAMAN USER
+export async function getUserBorrows() {
+  try {
+    console.log('📚 [ACTION] Getting user borrows...');
+
+    // Ambil user dari token cookie
+    const user = await getCurrentUserFromToken();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Silakan login terlebih dahulu'
+      };
+    }
+
+    const userId = user.id;
+
+    if (!userId) {
+      return {
+        success: false,
+        error: 'User ID tidak ditemukan'
+      };
+    }
+
+    console.log('👤 [ACTION] Fetching borrows for user ID:', userId);
+
+    // Ambil data borrow dari database
+    const [borrows]: any = await connection.execute(
+      `SELECT
+        b.id,
+        b.book_id,
+        b.borrow_date,
+        b.due_date,
+        b.return_date,
+        b.status,
+        b.created_at,
+        bk.title as book_title,
+        bk.author as book_author,
+        bk.category_name as book_category,
+        bk.book_code,
+        u.name as user_name
+       FROM borrows b
+       JOIN books bk ON b.book_id = bk.id
+       JOIN users u ON b.user_id = u.id
+       WHERE b.user_id = ?
+       ORDER BY b.created_at DESC`,
+      [userId]
+    );
+
+    console.log(`📊 [ACTION] Found ${borrows.length} borrow records`);
+
+    return {
+      success: true,
+      data: borrows
+    };
+
+  } catch (error: any) {
+    console.error('❌ [ACTION] Error getting user borrows:', error);
+    return {
+      success: false,
+      error: error.message || 'Terjadi kesalahan server'
+    };
+  }
+}
+
+// 3. ACTION UNTUK MENDAPATKAN DETAIL BUKU
+// Di actions.ts - UPDATE fungsi getBookDetail
+export async function getBookDetail(bookId: number) {
+  try {
+    console.log('📖 [ACTION] Getting book detail for ID:', bookId);
+
+    const [books]: any = await connection.execute(
+      `SELECT
+        id, title, author, publisher, cover_image,
+        category_name, available_quantity, total_quantity,
+        book_code, isbn, isbnr, description, publication_year,
+        category_id, created_at, updated_at
+       FROM books WHERE id = ?`,
+      [bookId]
+    );
+
+    if (books.length === 0) {
+      return {
+        success: false,
+        error: 'Buku tidak ditemukan'
+      };
+    }
+
+    return {
+      success: true,
+      data: books[0],
+      // Tambahkan user info jika ada
+      user: await getCurrentUserFromToken() // Ini optional, tidak required
+    };
+
+  } catch (error: any) {
+    console.error('❌ [ACTION] Error getting book detail:', error);
+    return {
+      success: false,
+      error: error.message || 'Terjadi kesalahan server'
+    };
+  }
+}
+
+// 4. ACTION UNTUK CANCEL BORROW (SISWA BATALIN PINJAMAN)
+export async function cancelBorrow(borrowId: number) {
+  try {
+    const user = await getCurrentUserFromToken();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Silakan login terlebih dahulu'
+      };
+    }
+
+    const userId = user.id;
+
+    // 1. Cek apakah borrow milik user ini
+    const [borrowRows]: any = await connection.execute(
+      `SELECT b.*, bk.id as book_id
+       FROM borrows b
+       JOIN books bk ON b.book_id = bk.id
+       WHERE b.id = ? AND b.user_id = ?`,
+      [borrowId, userId]
+    );
+
+    if (borrowRows.length === 0) {
+      return {
+        success: false,
+        error: 'Peminjaman tidak ditemukan atau bukan milik Anda'
+      };
+    }
+
+    const borrow = borrowRows[0];
+
+    // 2. Hanya bisa cancel jika status masih 'pending'
+    if (borrow.status !== 'pending') {
+      return {
+        success: false,
+        error: `Tidak dapat membatalkan peminjaman dengan status "${borrow.status}"`
+      };
+    }
+
+    // 3. Mulai transaction
+    await connection.execute('START TRANSACTION');
+
+    try {
+      // 4. Update status menjadi 'cancelled'
+      await connection.execute(
+        `UPDATE borrows SET status = 'cancelled', notes = 'Dibatalkan oleh user' WHERE id = ?`,
+        [borrowId]
+      );
+
+      // 5. Tambah kembali stok buku
+      await connection.execute(
+        "UPDATE books SET available_quantity = available_quantity + 1 WHERE id = ?",
+        [borrow.book_id]
+      );
+
+      // 6. Commit transaction
+      await connection.execute('COMMIT');
+
+      return {
+        success: true,
+        message: 'Peminjaman berhasil dibatalkan'
+      };
+
+    } catch (error) {
+      // Rollback jika ada error
+      await connection.execute('ROLLBACK');
+      throw error;
+    }
+
+  } catch (error: any) {
+    console.error('❌ [ACTION] Error cancelling borrow:', error);
+    return {
+      success: false,
+      error: error.message || 'Terjadi kesalahan server'
+    };
+  }
+}
+
+// 5. ACTION UNTUK PERPANJANG BORROW
+export async function extendBorrow(borrowId: number, days: number = 7) {
+  try {
+    const user = await getCurrentUserFromToken();
+
+    if (!user) {
+      return {
+        success: false,
+        error: 'Silakan login terlebih dahulu'
+      };
+    }
+
+    const userId = user.id;
+
+    // 1. Cek apakah borrow milik user ini
+    const [borrowRows]: any = await connection.execute(
+      "SELECT * FROM borrows WHERE id = ? AND user_id = ?",
+      [borrowId, userId]
+    );
+
+    if (borrowRows.length === 0) {
+      return {
+        success: false,
+        error: 'Peminjaman tidak ditemukan atau bukan milik Anda'
+      };
+    }
+
+    const borrow = borrowRows[0];
+
+    // 2. Hanya bisa extend jika status 'approved'
+    if (borrow.status !== 'approved') {
+      return {
+        success: false,
+        error: `Hanya dapat memperpanjang peminjaman dengan status "approved"`
+      };
+    }
+
+    // 3. Hitung due_date baru
+    const currentDueDate = new Date(borrow.due_date);
+    const newDueDate = new Date(currentDueDate);
+    newDueDate.setDate(newDueDate.getDate() + days);
+
+    // 4. Update due_date
+    await connection.execute(
+      "UPDATE borrows SET due_date = ? WHERE id = ?",
+      [newDueDate, borrowId]
+    );
+
+    return {
+      success: true,
+      message: `Peminjaman berhasil diperpanjang ${days} hari`,
+      data: {
+        new_due_date: newDueDate
+      }
+    };
+
+  } catch (error: any) {
+    console.error('❌ [ACTION] Error extending borrow:', error);
+    return {
+      success: false,
+      error: error.message || 'Terjadi kesalahan server'
+    };
+  }
+}
+
+// 6. ACTION UNTUK MENDAPATKAN SEMUA BUKU (untuk halaman home/books_list)
+export async function getAllBooks() {
+  try {
+    console.log('📚 [ACTION] Getting all books...');
+
+    const [books]: any = await connection.execute(
+      `SELECT
+        id, title, author, publisher, cover_image,
+        category_name, available_quantity, total_quantity,
+        book_code, isbn, isbnr, description, publication_year,
+        created_at
+       FROM books
+       ORDER BY created_at DESC`
+    );
+
+    console.log(`📊 [ACTION] Found ${books.length} books`);
+
+    return {
+      success: true,
+      data: books
+    };
+
+  } catch (error: any) {
+    console.error('❌ [ACTION] Error getting books:', error);
+    return {
+      success: false,
+      error: error.message || 'Terjadi kesalahan server'
+    };
   }
 }
