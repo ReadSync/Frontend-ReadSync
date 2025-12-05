@@ -81,3 +81,58 @@ export const useBooks = (): UseBooksResult => {
 
   return { books, categories, loading, error, refetch: fetchBooks };
 };
+
+interface UseBookDetailResult {
+  book: Book | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+export const useBookDetail = (bookId: string | string[] | undefined): UseBookDetailResult => {
+  const [book, setBook] = useState<Book | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchBook = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      if (!bookId) {
+        throw new Error('Book ID is required');
+      }
+      
+      console.log(`Fetching book ${bookId} from: http://localhost:5000/api/books/${bookId}`);
+      
+      const response = await fetch(`http://localhost:5000/api/books/${bookId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('Book API Response:', result);
+      
+      if (result.status === "success") {
+        setBook(result.data);
+        console.log(`Loaded book: ${result.data.title}`);
+      } else {
+        throw new Error(result.message || 'Book not found');
+      }
+    } catch (error: any) {
+      console.error('Error fetching book:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (bookId) {
+      fetchBook();
+    }
+  }, [bookId]);
+
+  return { book, loading, error, refetch: fetchBook };
+};

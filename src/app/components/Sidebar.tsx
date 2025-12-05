@@ -1,11 +1,11 @@
 "use client"
-import { useState } from 'react' // ← TAMBAH INI
+import { useState } from 'react' 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const menuItems = [
-  { name: 'Dashboard', href: '/home', icon: '🏠' },
-  { name: 'Book List', href: '/home/books', icon: '📚' },
+  { name: 'Home', href: '/home', icon: '🏠' },
+  { name: 'Book List', href: '/home/books_list', icon: '📚' },
   { name: 'Borrow List', href: '/home/borrow', icon: '📋' },
   { name: 'Favorite', href: '/home/favorite', icon: '⭐' },
   { name: 'Settings', href: '/home/settings', icon: '⚙️' },

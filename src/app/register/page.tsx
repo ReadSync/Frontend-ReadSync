@@ -118,7 +118,6 @@ const Register = () => {
     loadData();
   }, []);
 
-  // Motion animasi
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {

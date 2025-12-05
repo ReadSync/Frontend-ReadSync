@@ -13,15 +13,12 @@ export default function Navbar2({ session }: Navbar2Props) {
 
   const handleLogout = async () => {
     try {
-      // Close dropdown
       toggleDropdown('profile')
-
       await signOut({
         redirect: false,
         callbackUrl: '/login'
       })
 
-      // Clear session and redirect
       router.push('/login')
       router.refresh()
     } catch (error) {
@@ -54,9 +51,7 @@ export default function Navbar2({ session }: Navbar2Props) {
             </div>
           </div>
 
-          {/* Dropdown Menus */}
           <div className="flex items-center space-x-4 ml-6" ref={dropdownRef}>
-            {/* History Dropdown */}
             <div className="relative">
               <button
                 onClick={() => toggleDropdown('history')}
@@ -77,8 +72,6 @@ export default function Navbar2({ session }: Navbar2Props) {
                 </div>
               )}
             </div>
-
-            {/* Notification Dropdown */}
             <div className="relative">
               <button
                 onClick={() => toggleDropdown('notifications')}
@@ -91,7 +84,6 @@ export default function Navbar2({ session }: Navbar2Props) {
                   3
                 </span>
               </button>
-
               {activeDropdown === 'notifications' && (
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                   <div className="px-4 py-2">
@@ -101,8 +93,6 @@ export default function Navbar2({ session }: Navbar2Props) {
                 </div>
               )}
             </div>
-
-            {/* Profile Dropdown */}
             <div className="relative">
               <button
                 onClick={() => toggleDropdown('profile')}
@@ -125,7 +115,6 @@ export default function Navbar2({ session }: Navbar2Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-
               {activeDropdown === 'profile' && (
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                   <div className="px-4 py-3 border-b border-gray-100">
@@ -139,14 +128,11 @@ export default function Navbar2({ session }: Navbar2Props) {
                       {userRole}
                     </p>
                   </div>
-
                   <div className="py-1">
                     <div className="px-4 py-2 text-sm text-gray-500 text-center">
                       Menu profile coming soon
                     </div>
                   </div>
-
-
                   <div className="border-t border-gray-100 mt-1">
                     <button
                       onClick={handleLogout}
