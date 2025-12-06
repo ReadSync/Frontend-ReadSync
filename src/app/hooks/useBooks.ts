@@ -1,7 +1,9 @@
 // hooks/useBooks.js
 "use client";
 import { useState, useEffect, useCallback } from 'react';
+import { addNotification } from '../lib/utils';
 
+// =========== Interfaces ===========
 export interface Book {
   id: number;
   title: string;
@@ -19,6 +21,11 @@ export interface Book {
   category_id?: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface Category {
+  id: number;
+  category_name: string;
 }
 
 interface Borrow {
@@ -42,10 +49,12 @@ interface Borrow {
 
 interface BorrowResponse {
   id: number;
+  bookId?: number;
   bookInitials: string;
   bookTitle: string;
   bookAuthor: string;
   bookCategory: string;
+  bookCoverImage?: string;
   borrowDate: string;
   dueDate: string;
   daysLeft: string;
@@ -118,6 +127,56 @@ export const useBooks = (): UseBooksResult => {
   }, []);
 
   return { books, categories, loading, error, refetch: fetchBooks };
+};
+
+// =========== Hook untuk semua kategori ===========
+interface UseAllCategoriesResult {
+  categories: Category[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+export const useAllCategories = (): UseAllCategoriesResult => {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCategories = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log('Fetching categories from: http://localhost:5000/api/categories');
+
+      const response = await fetch('http://localhost:5000/api/categories');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Categories API Response:', result);
+
+      if (result.status === "success") {
+        setCategories(result.data || []);
+        console.log(`Loaded ${result.data?.length || 0} categories`);
+      } else {
+        throw new Error(result.message || 'Failed to fetch categories');
+      }
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  return { categories, loading, error, refetch: fetchCategories };
 };
 
 // =========== Hook untuk detail buku ===========
@@ -217,7 +276,7 @@ export const useBorrowBook = (): UseBorrowBookResult => {
       console.log('Response data:', data);
 
       if (data.status === "error") {
-        throw new Error(data.message || 'Gagal meminjam buku');
+        throw new Error(data.message || 'Failed to borrow book');
       }
 
       return data;
@@ -280,48 +339,88 @@ export const useUserBorrows = (userId?: string | number): UseUserBorrowsResult =
           }
           bookInitials = bookInitials.toUpperCase();
 
-          // Calculate days left/overdue
+          // Calculate days left/overdue and fine
           let daysLeft = '';
+          let fine = 0;
+          const FINE_PER_DAY = 5000; // 5,000 per day
+
           if (borrow.due_date) {
             const dueDate = new Date(borrow.due_date);
             const today = new Date();
+            // Reset time to midnight for accurate day calculation
+            today.setHours(0, 0, 0, 0);
+            dueDate.setHours(0, 0, 0, 0);
+
             const diffTime = dueDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            daysLeft = diffDays < 0 ? `${Math.abs(diffDays)} hari lewat` : `${diffDays} hari lagi`;
+
+            if (diffDays < 0 && borrow.status !== 'returned') {
+              // Book is overdue - calculate fine
+              const overdueDays = Math.abs(diffDays);
+              fine = overdueDays * FINE_PER_DAY;
+              daysLeft = `${overdueDays} day${overdueDays > 1 ? 's' : ''} overdue`;
+
+              // Create notification for fine (only if fine > 0)
+              if (fine > 0 && typeof window !== 'undefined') {
+                // Check if notification already exists for this borrow today
+                const notificationKey = `fine_notif_${borrow.id}_${new Date().toDateString()}`;
+                const lastNotification = localStorage.getItem(notificationKey);
+
+                if (!lastNotification) {
+                  addNotification({
+                    type: 'fine',
+                    title: 'Overdue Book Fine',
+                    message: `Your book "${borrow.book_title || 'Unknown'}" is ${overdueDays} day${overdueDays > 1 ? 's' : ''} overdue. Fine: Rp ${fine.toLocaleString('id-ID')}`,
+                    bookId: borrow.book_id,
+                    bookTitle: borrow.book_title || 'Unknown Book',
+                    fineAmount: fine
+                  });
+
+                  // Mark that notification was created today
+                  localStorage.setItem(notificationKey, 'true');
+                }
+              }
+            } else if (diffDays >= 0) {
+              daysLeft = `${diffDays} day${diffDays !== 1 ? 's' : ''} left`;
+            } else {
+              daysLeft = 'Returned';
+            }
           }
 
           // Format dates
           const formatDate = (dateStr: string | null): string => {
             if (!dateStr) return '-';
             const date = new Date(dateStr);
-            return date.toLocaleDateString('id-ID', {
+            return date.toLocaleDateString('en-US', {
               day: 'numeric',
-              month: 'numeric',
+              month: 'short',
               year: 'numeric'
             });
           };
 
-          // Map status to Indonesian
+          // Map status to English
           const statusMap: Record<string, string> = {
-            'pending': 'Menunggu',
-            'approved': 'Dipinjam',
-            'returned': 'Dikembalikan',
-            'overdue': 'Terlambat',
-            'canceled': 'Ditolak'
+            'pending': 'Pending',
+            'approved': 'Borrowed',
+            'returned': 'Returned',
+            'overdue': 'Overdue',
+            'canceled': 'Rejected'
           };
 
           return {
             id: borrow.id,
+            bookId: borrow.book_id,
             bookInitials,
             bookTitle: borrow.book_title || 'Unknown Book',
             bookAuthor: borrow.book_author || 'Unknown Author',
             bookCategory: borrow.book_category || 'Unknown Category',
+            bookCoverImage: borrow.cover_image || borrow.book_cover_image || null,
             borrowDate: formatDate(borrow.borrow_date),
             dueDate: formatDate(borrow.due_date),
             daysLeft,
             status: statusMap[borrow.status] || borrow.status,
             returnDate: borrow.return_date ? formatDate(borrow.return_date) : null,
-            fine: 0, // Sesuaikan jika ada data denda
+            fine: fine,
             userName: borrow.user_name,
             userNisn: borrow.user_nisn,
             userId: borrow.user_id
@@ -386,7 +485,7 @@ export const useBorrowActions = (): UseBorrowActionsResult => {
       const data = await response.json();
 
       if (data.status === "error") {
-        throw new Error(data.message || 'Gagal menyetujui peminjaman');
+        throw new Error(data.message || 'Failed to approve borrow');
       }
 
       return data;
@@ -424,7 +523,7 @@ export const useBorrowActions = (): UseBorrowActionsResult => {
       const data = await response.json();
 
       if (data.status === "error") {
-        throw new Error(data.message || 'Gagal menolak peminjaman');
+        throw new Error(data.message || 'Failed to reject borrow');
       }
 
       return data;
@@ -462,7 +561,7 @@ export const useBorrowActions = (): UseBorrowActionsResult => {
       const data = await response.json();
 
       if (data.status === "error") {
-        throw new Error(data.message || 'Gagal mengembalikan buku');
+        throw new Error(data.message || 'Failed to return book');
       }
 
       return data;
@@ -537,48 +636,88 @@ export const useAllBorrows = (status?: string): UseAllBorrowsResult => {
           }
           bookInitials = bookInitials.toUpperCase();
 
-          // Calculate days left/overdue
+          // Calculate days left/overdue and fine
           let daysLeft = '';
+          let fine = 0;
+          const FINE_PER_DAY = 5000; // 5,000 per day
+
           if (borrow.due_date) {
             const dueDate = new Date(borrow.due_date);
             const today = new Date();
+            // Reset time to midnight for accurate day calculation
+            today.setHours(0, 0, 0, 0);
+            dueDate.setHours(0, 0, 0, 0);
+
             const diffTime = dueDate.getTime() - today.getTime();
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            daysLeft = diffDays < 0 ? `${Math.abs(diffDays)} hari lewat` : `${diffDays} hari lagi`;
+
+            if (diffDays < 0 && borrow.status !== 'returned') {
+              // Book is overdue - calculate fine
+              const overdueDays = Math.abs(diffDays);
+              fine = overdueDays * FINE_PER_DAY;
+              daysLeft = `${overdueDays} day${overdueDays > 1 ? 's' : ''} overdue`;
+
+              // Create notification for fine (only if fine > 0)
+              if (fine > 0 && typeof window !== 'undefined') {
+                // Check if notification already exists for this borrow today
+                const notificationKey = `fine_notif_${borrow.id}_${new Date().toDateString()}`;
+                const lastNotification = localStorage.getItem(notificationKey);
+
+                if (!lastNotification) {
+                  addNotification({
+                    type: 'fine',
+                    title: 'Overdue Book Fine',
+                    message: `Your book "${borrow.book_title || 'Unknown'}" is ${overdueDays} day${overdueDays > 1 ? 's' : ''} overdue. Fine: Rp ${fine.toLocaleString('id-ID')}`,
+                    bookId: borrow.book_id,
+                    bookTitle: borrow.book_title || 'Unknown Book',
+                    fineAmount: fine
+                  });
+
+                  // Mark that notification was created today
+                  localStorage.setItem(notificationKey, 'true');
+                }
+              }
+            } else if (diffDays >= 0) {
+              daysLeft = `${diffDays} day${diffDays !== 1 ? 's' : ''} left`;
+            } else {
+              daysLeft = 'Returned';
+            }
           }
 
           // Format dates
           const formatDate = (dateStr: string | null): string => {
             if (!dateStr) return '-';
             const date = new Date(dateStr);
-            return date.toLocaleDateString('id-ID', {
+            return date.toLocaleDateString('en-US', {
               day: 'numeric',
-              month: 'numeric',
+              month: 'short',
               year: 'numeric'
             });
           };
 
-          // Map status to Indonesian
+          // Map status to English
           const statusMap: Record<string, string> = {
-            'pending': 'Menunggu',
-            'approved': 'Dipinjam',
-            'returned': 'Dikembalikan',
-            'overdue': 'Terlambat',
-            'canceled': 'Ditolak'
+            'pending': 'Pending',
+            'approved': 'Borrowed',
+            'returned': 'Returned',
+            'overdue': 'Overdue',
+            'canceled': 'Rejected'
           };
 
           return {
             id: borrow.id,
+            bookId: borrow.book_id,
             bookInitials,
             bookTitle: borrow.book_title || 'Unknown Book',
             bookAuthor: borrow.book_author || 'Unknown Author',
             bookCategory: borrow.book_category || 'Unknown Category',
+            bookCoverImage: borrow.cover_image || borrow.book_cover_image || null,
             borrowDate: formatDate(borrow.borrow_date),
             dueDate: formatDate(borrow.due_date),
             daysLeft,
             status: statusMap[borrow.status] || borrow.status,
             returnDate: borrow.return_date ? formatDate(borrow.return_date) : null,
-            fine: 0, // Sesuaikan jika ada data denda
+            fine: fine,
             userName: borrow.user_name,
             userNisn: borrow.user_nisn,
             userId: borrow.user_id
@@ -592,13 +731,13 @@ export const useAllBorrows = (status?: string): UseAllBorrowsResult => {
       }
     } catch (err: any) {
       console.error('Error fetching borrows:', err);
-      const errorMessage = err.message || 'Gagal mengambil data peminjaman';
+      const errorMessage = err.message || 'Failed to fetch borrow data';
       setError(errorMessage);
 
-      // Log lebih detail untuk debugging
+      // Log more details for debugging
       if (err.message?.includes('JSON')) {
-        console.error('Kemungkinan endpoint tidak tersedia atau mengembalikan HTML error page');
-        console.error('Pastikan backend memiliki endpoint: GET /api/borrows');
+        console.error('Possible endpoint not available or returning HTML error page');
+        console.error('Make sure backend has endpoint: GET /api/borrows');
       }
     } finally {
       setLoading(false);
@@ -610,4 +749,223 @@ export const useAllBorrows = (status?: string): UseAllBorrowsResult => {
   }, [fetchBorrows]);
 
   return { borrows, loading, error, refetch: fetchBorrows };
+};
+
+// =========== Hook untuk Categories ===========
+interface UseCategoriesResult {
+  categories: Category[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+export const useCategories = (): UseCategoriesResult => {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchCategories = useCallback(async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch('http://localhost:5000/api/categories');
+      const data = await response.json();
+      if (data.status === 'success') {
+        setCategories(data.data);
+      } else {
+        throw new Error(data.message || 'Failed to fetch categories');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch categories');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  return { categories, loading, error, refetch: fetchCategories };
+};
+
+// =========== Hook untuk Create Book ===========
+interface UseCreateBookResult {
+  createBook: (bookData: {
+    book_code?: string;
+    title: string;
+    author: string;
+    publisher?: string;
+    isbn?: string;
+    description?: string;
+    publication_year?: number;
+    category_id: number;
+    total_quantity: number;
+    available_quantity: number;
+    cover_image?: string;
+  }) => Promise<any>;
+  loading: boolean;
+  error: string | null;
+}
+
+export const useCreateBook = (): UseCreateBookResult => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createBook = async (bookData: {
+    book_code?: string;
+    title: string;
+    author: string;
+    publisher?: string;
+    isbn?: string;
+    description?: string;
+    publication_year?: number;
+    category_id: number;
+    total_quantity: number;
+    available_quantity: number;
+    cover_image?: string;
+  }) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch('http://localhost:5000/api/books', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookData),
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
+        return data;
+      } else {
+        throw new Error(data.message || 'Failed to add book');
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to add book';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { createBook, loading, error };
+};
+
+// =========== Hook untuk Update Book ===========
+interface UseUpdateBookResult {
+  updateBook: (bookId: number, updates: any) => Promise<any>;
+  loading: boolean;
+  error: string | null;
+}
+
+export const useUpdateBook = (): UseUpdateBookResult => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateBook = async (bookId: number, updates: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`http://localhost:5000/api/books/${bookId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
+        return data;
+      } else {
+        throw new Error(data.message || 'Failed to update book');
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to update book';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { updateBook, loading, error };
+};
+
+// =========== Hook untuk Delete Book ===========
+interface UseDeleteBookResult {
+  deleteBook: (bookId: number) => Promise<any>;
+  loading: boolean;
+  error: string | null;
+}
+
+export const useDeleteBook = (): UseDeleteBookResult => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const deleteBook = async (bookId: number) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`http://localhost:5000/api/books/${bookId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
+        return data;
+      } else {
+        throw new Error(data.message || 'Failed to delete book');
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to delete book';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { deleteBook, loading, error };
+};
+
+// =========== Hook untuk Search Books ===========
+interface UseSearchBooksResult {
+  searchBooks: (query: string) => Promise<Book[]>;
+  loading: boolean;
+  error: string | null;
+}
+
+export const useSearchBooks = (): UseSearchBooksResult => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const searchBooks = async (query: string): Promise<Book[]> => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch('http://localhost:5000/api/books');
+      const data = await response.json();
+      if (data.status === 'success') {
+        const filtered = data.data.filter((book: Book) =>
+          book.title.toLowerCase().includes(query.toLowerCase()) ||
+          book.book_code?.toLowerCase().includes(query.toLowerCase())
+        );
+        return filtered;
+      } else {
+        throw new Error(data.message || 'Failed to search books');
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to search books';
+      setError(errorMsg);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { searchBooks, loading, error };
 };

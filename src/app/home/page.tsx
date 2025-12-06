@@ -47,7 +47,7 @@ export default function HomePage() {
               <Link 
                 key={book.id}
                 href={`/home/book/${book.id}`}
-                className="block border rounded-lg p-4 hover:shadow-md transition-shadow bg-white hover:scale-[1.02] hover:border-green-600 cursor-pointer"
+                className="block border rounded-lg p-4 hover:shadow-md transition-shadow bg-white hover:scale-[1.02] cursor-pointer"
               >
        <div className="h-48 bg-gray-100 rounded-lg mb-3 overflow-hidden">
   <img 

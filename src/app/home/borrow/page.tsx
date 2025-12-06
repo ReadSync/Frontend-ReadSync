@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { useUserBorrows } from '../../hooks/useBooks';
+import { useUserBorrows, useBorrowActions } from '../../hooks/useBooks';
 import { useSession } from 'next-auth/react';
 
 export default function StudentBorrow() {
@@ -8,53 +8,76 @@ export default function StudentBorrow() {
   const userId = session?.user?.id ? parseInt(session.user.id) : null;
 
   const { borrows, loading, error, refetch } = useUserBorrows(userId || undefined);
+  const { returnBorrow, loading: returnLoading } = useBorrowActions();
   const [refreshing, setRefreshing] = useState(false);
+  const [returningId, setReturningId] = useState<number | null>(null);
 
   useEffect(() => {
     if (status === "authenticated" && userId) {
       refetch();
     }
   }, [userId, status, refetch]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
   };
 
-  // Status badge sesuai screenshot
+  const handleReturn = async (borrowId: number) => {
+    if (!confirm('Are you sure you want to return this book?')) {
+      return;
+    }
+
+    try {
+      setReturningId(borrowId);
+      await returnBorrow(borrowId);
+      alert('Book returned successfully!');
+      await refetch(); // Refresh data after return
+    } catch (err: any) {
+      alert(`Failed to return book: ${err.message}`);
+    } finally {
+      setReturningId(null);
+    }
+  };
+
+  // Filter out returned books from the list
+  const activeBorrows = borrows.filter(borrow => borrow.status !== 'Returned');
+
+  // Status badge
   const getStatusBadge = (status: any) => {
-    if (status === 'Menunggu') {
+    if (status === 'Pending') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-          Menunggu
+          Pending
         </span>
       );
     }
-    if (status === 'Dikembalikan') {
+    if (status === 'Returned') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-          Dikembalikan
+          Returned
         </span>
       );
     }
-    if (status === 'Dipinjam') {
+    if (status === 'Borrowed') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-          Dipinjam
+          Borrowed
         </span>
       );
     }
-    if (status === 'Terlambat') {
+    if (status === 'Overdue') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-          Terlambat
+          Overdue
         </span>
       );
     }
-    if (status === 'Ditolak') {
+    if (status === 'Rejected') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-          Ditolak
+          Rejected
         </span>
       );
     }
@@ -85,7 +108,7 @@ export default function StudentBorrow() {
       <div className="min-h-screen bg-gray-50 p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data...</p>
+          <p className="mt-4 text-gray-600">Loading data...</p>
         </div>
       </div>
     );
@@ -95,7 +118,7 @@ export default function StudentBorrow() {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">Silakan login untuk melihat daftar peminjaman</p>
+          <p className="text-gray-600 mb-4">Please login to view your borrow list</p>
           <button
             onClick={() => window.location.href = '/login'}
             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
@@ -112,7 +135,7 @@ export default function StudentBorrow() {
       <div className="min-h-screen bg-gray-50 p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data peminjaman...</p>
+          <p className="mt-4 text-gray-600">Loading borrow data...</p>
         </div>
       </div>
     );
@@ -128,7 +151,7 @@ export default function StudentBorrow() {
               onClick={handleRefresh}
               className="mt-2 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
             >
-              Coba Lagi
+              Try Again
             </button>
           </div>
         </div>
@@ -142,32 +165,15 @@ export default function StudentBorrow() {
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Peminjaman Saya</h1>
-              <p className="text-gray-600 mt-1">Daftar buku yang sedang dan pernah Anda pinjam</p>
-              {session?.user && (
-                <p className="text-xs text-gray-500 mt-1">User ID: {session.user.id}</p>
-              )}
+              <h1 className="text-2xl font-bold text-gray-800">My Borrows</h1>
+              <p className="text-gray-600 mt-1">List of books you are currently borrowing and have borrowed</p>
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2"
-            >
-              {refreshing ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                  Memuat...
-                </>
-              ) : (
-                '🔄 Refresh'
-              )}
-            </button>
           </div>
         </div>
 
         {refreshing && (
           <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-blue-700 text-sm">Memperbarui data...</p>
+            <p className="text-blue-700 text-sm">Updating data...</p>
           </div>
         )}
 
@@ -180,24 +186,24 @@ export default function StudentBorrow() {
                     NO
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    JUDUL BUKU
+                    BOOK TITLE
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    TANGGAL PINJAM
+                    BORROW DATE
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    BATAS KEMBALI
+                    DUE DATE
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     STATUS
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    AKSI
+                    ACTION
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {borrows.map((item, index) => (
+                {activeBorrows.map((item, index) => (
                   <tr key={item.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">{index + 1}</div>
@@ -223,7 +229,6 @@ export default function StudentBorrow() {
                       <div className="text-sm text-gray-900">{item.borrowDate || '-'}</div>
                     </td>
 
-
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{item.dueDate || '-'}</div>
                       {item.daysLeft && (
@@ -234,33 +239,53 @@ export default function StudentBorrow() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
                         {getStatusBadge(item.status)}
-                        {item.returnDate && item.status === 'Dikembalikan' && (
+                        {item.returnDate && item.status === 'Returned' && (
                           <div className="text-xs text-gray-500">
-                            Dikembalikan: {item.returnDate}
+                            Returned: {item.returnDate}
+                          </div>
+                        )}
+                        {item.fine > 0 && (
+                          <div className="text-xs text-red-600 font-semibold">
+                            Fine: Rp {item.fine.toLocaleString('id-ID')}
                           </div>
                         )}
                       </div>
                     </td>
 
-
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex space-x-2">
-                        {item.status === 'Menunggu' && (
+                        {item.status === 'Pending' && (
                           <button className="px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-medium rounded hover:bg-blue-100">
-                            Perpanjang
+                            Extend
                           </button>
                         )}
-                        {item.status === 'Dipinjam' && (
-                          <button className="px-3 py-1.5 bg-green-50 text-green-700 text-xs font-medium rounded hover:bg-green-100">
-                            Kembalikan
+                        {item.status === 'Borrowed' && (
+                          <button
+                            onClick={() => handleReturn(item.id)}
+                            disabled={returningId === item.id || returnLoading}
+                            className="px-3 py-1.5 bg-green-50 text-green-700 text-xs font-medium rounded hover:bg-green-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            {returningId === item.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-700"></div>
+                                Returning...
+                              </>
+                            ) : (
+                              'Return'
+                            )}
                           </button>
                         )}
-                        {item.status === 'Ditolak' && (
-                          <span className="text-xs text-gray-500 italic">Peminjaman ditolak</span>
+                        {item.status === 'Rejected' && (
+                          <span className="text-xs text-gray-500 italic">Borrow rejected</span>
                         )}
-                        <button className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50">
-                          Detail
-                        </button>
+                        {item.bookId && (
+                          <a
+                            href={`/home/book/${item.bookId}`}
+                            className="px-3 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50"
+                          >
+                            Detail
+                          </a>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -269,28 +294,27 @@ export default function StudentBorrow() {
             </table>
           </div>
 
-
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
             <div className="text-sm text-gray-500">
-              {borrows.length === 0 ? (
-                'Belum ada data peminjaman'
+              {activeBorrows.length === 0 ? (
+                'No active borrows'
               ) : (
-                `Menampilkan semua peminjaman Anda (${borrows.length} total)`
+                `Showing ${activeBorrows.length} active borrow${activeBorrows.length > 1 ? 's' : ''}`
               )}
             </div>
           </div>
         </div>
 
-        {borrows.length === 0 && (
+        {activeBorrows.length === 0 && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200 mt-6">
             <div className="text-4xl mb-4">📚</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Belum ada peminjaman</h3>
-            <p className="text-gray-500 mb-4">Temukan buku menarik dan ajukan peminjaman pertama Anda!</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No borrows yet</h3>
+            <p className="text-gray-500 mb-4">Find interesting books and submit your first borrow request!</p>
             <button
               onClick={() => window.location.href = '/home/books'}
               className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
             >
-              Jelajahi Buku
+              Explore Books
             </button>
           </div>
         )}

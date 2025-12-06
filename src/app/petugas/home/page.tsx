@@ -1,11 +1,10 @@
 "use client";
 import React, { useState } from 'react';
-import { useAllBorrows } from '../../../hooks/useBooks';
-import { useBorrowActions } from '../../../hooks/useBooks';
+import { useAllBorrows, useBorrowActions } from '../../hooks/useBooks';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 
-export default function PetugasBorrows() {
+export default function PetugasDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [selectedStatus, setSelectedStatus] = useState<string>('pending');
@@ -25,7 +24,7 @@ export default function PetugasBorrows() {
   };
 
   const handleApprove = async (borrowId: number) => {
-    if (!confirm('Apakah Anda yakin ingin menyetujui peminjaman ini?')) {
+    if (!confirm('Are you sure you want to approve this borrow request?')) {
       return;
     }
 
@@ -33,65 +32,65 @@ export default function PetugasBorrows() {
       setActionLoading(borrowId);
       await approveBorrow(borrowId);
       await refetch();
-      alert('Peminjaman berhasil disetujui');
+      alert('Borrow request approved successfully');
     } catch (err: any) {
-      alert(`Gagal menyetujui: ${err.message}`);
+      alert(`Failed to approve: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleReject = async (borrowId: number) => {
-    if (!confirm('Apakah Anda yakin ingin menolak peminjaman ini?')) {
+    if (!confirm('Are you sure you want to reject this borrow request?')) {
       return;
     }
 
     try {
       setActionLoading(borrowId);
       await rejectBorrow(borrowId);
-      await refetch(); // Refresh data setelah reject
-      alert('Peminjaman berhasil ditolak');
+      await refetch(); // Refresh data after reject
+      alert('Borrow request rejected successfully');
     } catch (err: any) {
-      alert(`Gagal menolak: ${err.message}`);
+      alert(`Failed to reject: ${err.message}`);
     } finally {
       setActionLoading(null);
     }
   };
 
-  // Status badge sesuai screenshot
+  // Status badge
   const getStatusBadge = (status: string) => {
-    if (status === 'Menunggu') {
+    if (status === 'Pending') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
-          Menunggu
+          Pending
         </span>
       );
     }
-    if (status === 'Dikembalikan') {
+    if (status === 'Returned') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
-          Dikembalikan
+          Returned
         </span>
       );
     }
-    if (status === 'Dipinjam') {
+    if (status === 'Borrowed') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-          Dipinjam
+          Borrowed
         </span>
       );
     }
-    if (status === 'Terlambat') {
+    if (status === 'Overdue') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
-          Terlambat
+          Overdue
         </span>
       );
     }
-    if (status === 'Ditolak') {
+    if (status === 'Rejected') {
       return (
         <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-          Ditolak
+          Rejected
         </span>
       );
     }
@@ -125,7 +124,7 @@ export default function PetugasBorrows() {
       <div className="min-h-screen bg-gray-50 p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data...</p>
+          <p className="mt-4 text-gray-600">Loading data...</p>
         </div>
       </div>
     );
@@ -140,12 +139,12 @@ export default function PetugasBorrows() {
     return (
       <div className="min-h-screen bg-gray-50 p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 mb-4">Akses ditolak. Halaman ini hanya untuk petugas/admin.</p>
+          <p className="text-gray-600 mb-4">Access denied. This page is only for staff/admin.</p>
           <button
             onClick={() => router.push('/home')}
             className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
           >
-            Kembali ke Home
+            Back to Home
           </button>
         </div>
       </div>
@@ -157,7 +156,7 @@ export default function PetugasBorrows() {
       <div className="min-h-screen bg-gray-50 p-4 md:p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data peminjaman...</p>
+          <p className="mt-4 text-gray-600">Loading borrow data...</p>
         </div>
       </div>
     );
@@ -188,26 +187,13 @@ export default function PetugasBorrows() {
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">Kelola Peminjaman</h1>
-              <p className="text-gray-600 mt-1">Daftar peminjaman yang perlu ditinjau dan dikelola</p>
+              <h1 className="text-2xl font-bold text-gray-800">Manage Borrows</h1>
+              <p className="text-gray-600 mt-1">List of borrows that need to be reviewed and managed</p>
               {session?.user && (
                 <p className="text-xs text-gray-500 mt-1">Role: {session.user.role}</p>
               )}
             </div>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2"
-            >
-              {refreshing ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
-                  Memuat...
-                </>
-              ) : (
-                '🔄 Refresh'
-              )}
-            </button>
+
           </div>
         </div>
 
@@ -221,7 +207,7 @@ export default function PetugasBorrows() {
                   : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
                 }`}
             >
-              Menunggu ({borrows.filter(b => b.status === 'Menunggu').length})
+              Pending ({borrows.filter(b => b.status === 'Pending').length})
             </button>
             <button
               onClick={() => setSelectedStatus('approved')}
@@ -230,7 +216,7 @@ export default function PetugasBorrows() {
                   : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
                 }`}
             >
-              Dipinjam
+              Borrowed
             </button>
             <button
               onClick={() => setSelectedStatus('returned')}
@@ -239,7 +225,7 @@ export default function PetugasBorrows() {
                   : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
                 }`}
             >
-              Dikembalikan
+              Returned
             </button>
             <button
               onClick={() => setSelectedStatus('canceled')}
@@ -248,7 +234,7 @@ export default function PetugasBorrows() {
                   : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
                 }`}
             >
-              Ditolak
+              Rejected
             </button>
             <button
               onClick={() => setSelectedStatus('')}
@@ -257,7 +243,7 @@ export default function PetugasBorrows() {
                   : 'bg-gray-100 text-gray-700 border-2 border-transparent hover:bg-gray-200'
                 }`}
             >
-              Semua
+              All
             </button>
           </div>
         </div>
@@ -265,7 +251,7 @@ export default function PetugasBorrows() {
         {/* Loading Refresh */}
         {refreshing && (
           <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            <p className="text-blue-700 text-sm">Memperbarui data...</p>
+            <p className="text-blue-700 text-sm">Updating data...</p>
           </div>
         )}
 
@@ -286,22 +272,22 @@ export default function PetugasBorrows() {
                     NO
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    PEMINJAM
+                    BORROWER
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    JUDUL BUKU
+                    BOOK TITLE
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    TANGGAL PINJAM
+                    BORROW DATE
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    BATAS KEMBALI
+                    DUE DATE
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     STATUS
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    AKSI
+                    ACTION
                   </th>
                 </tr>
               </thead>
@@ -326,8 +312,31 @@ export default function PetugasBorrows() {
                     {/* JUDUL BUKU */}
                     <td className="px-6 py-4">
                       <div className="flex items-start">
-                        <div className={`shrink-0 h-10 w-10 rounded flex items-center justify-center text-white font-bold text-sm ${getInitialsColor(item.bookInitials)}`}>
-                          {item.bookInitials}
+                        <div className="shrink-0 h-16 w-12 rounded overflow-hidden bg-gray-100 relative">
+                          {item.bookCoverImage ? (
+                            <>
+                              <img
+                                src={item.bookCoverImage}
+                                alt={item.bookTitle}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  target.style.display = 'none';
+                                  const fallback = target.parentElement?.querySelector('.cover-fallback');
+                                  if (fallback) {
+                                    fallback.classList.remove('hidden');
+                                  }
+                                }}
+                              />
+                              <div className="cover-fallback hidden absolute inset-0 w-full h-full flex items-center justify-center text-white font-bold text-xs bg-gradient-to-br from-gray-400 to-gray-600">
+                                {item.bookInitials}
+                              </div>
+                            </>
+                          ) : (
+                            <div className={`w-full h-full flex items-center justify-center text-white font-bold text-xs ${getInitialsColor(item.bookInitials)}`}>
+                              {item.bookInitials}
+                            </div>
+                          )}
                         </div>
                         <div className="ml-3">
                           <div className="text-sm font-medium text-gray-900">{item.bookTitle}</div>
@@ -357,9 +366,14 @@ export default function PetugasBorrows() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
                         {getStatusBadge(item.status)}
-                        {item.returnDate && item.status === 'Dikembalikan' && (
+                        {item.returnDate && item.status === 'Returned' && (
                           <div className="text-xs text-gray-500">
-                            Dikembalikan: {item.returnDate}
+                            Returned: {item.returnDate}
+                          </div>
+                        )}
+                        {item.fine > 0 && (
+                          <div className="text-xs text-red-600 font-semibold">
+                            Fine: Rp {item.fine.toLocaleString('id-ID')}
                           </div>
                         )}
                       </div>
@@ -368,7 +382,7 @@ export default function PetugasBorrows() {
                     {/* AKSI */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex space-x-2">
-                        {item.status === 'Menunggu' && (
+                        {item.status === 'Pending' && (
                           <>
                             <button
                               onClick={() => handleApprove(item.id)}
@@ -378,10 +392,10 @@ export default function PetugasBorrows() {
                               {actionLoading === item.id ? (
                                 <>
                                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-700"></div>
-                                  Memproses...
+                                  Processing...
                                 </>
                               ) : (
-                                '✓ Setujui'
+                                '✓ Approve'
                               )}
                             </button>
                             <button
@@ -392,10 +406,10 @@ export default function PetugasBorrows() {
                               {actionLoading === item.id ? (
                                 <>
                                   <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-red-700"></div>
-                                  Memproses...
+                                  Processing...
                                 </>
                               ) : (
-                                '✗ Tolak'
+                                '✗ Reject'
                               )}
                             </button>
                           </>
@@ -415,9 +429,9 @@ export default function PetugasBorrows() {
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
             <div className="text-sm text-gray-500">
               {borrows.length === 0 ? (
-                `Tidak ada data peminjaman dengan status "${selectedStatus === 'pending' ? 'Menunggu' : selectedStatus === 'approved' ? 'Dipinjam' : selectedStatus === 'returned' ? 'Dikembalikan' : selectedStatus === 'canceled' ? 'Ditolak' : 'Semua'}"`
+                `No borrow data with status "${selectedStatus === 'pending' ? 'Pending' : selectedStatus === 'approved' ? 'Borrowed' : selectedStatus === 'returned' ? 'Returned' : selectedStatus === 'canceled' ? 'Rejected' : 'All'}"`
               ) : (
-                `Menampilkan ${borrows.length} peminjaman`
+                `Showing ${borrows.length} borrow${borrows.length > 1 ? 's' : ''}`
               )}
             </div>
           </div>
@@ -427,8 +441,8 @@ export default function PetugasBorrows() {
         {borrows.length === 0 && (
           <div className="text-center py-12 bg-white rounded-lg border border-gray-200 mt-6">
             <div className="text-4xl mb-4">📋</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Tidak ada peminjaman</h3>
-            <p className="text-gray-500">Tidak ada data peminjaman yang sesuai dengan filter yang dipilih.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No borrows</h3>
+            <p className="text-gray-500">No borrow data matches the selected filter.</p>
           </div>
         )}
       </div>

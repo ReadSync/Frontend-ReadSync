@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import { Inter } from 'next/font/google'
 import { Button } from '../components/ui/Button'
@@ -7,7 +7,7 @@ import { Footer } from '../components/Footer'
 import { usePasswordToggle } from '../hooks/usePasswordToggle'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -64,16 +64,34 @@ const Login = () => {
 
       if (responese?.error) {
         alert("Login failed: " + responese.error);
+        setIsLoading(false);
         return;
       }
 
       if (responese?.ok) {
-        router.push("/home");
-        router.refresh();
+        // Wait a bit for session to be available, then check role
+        setTimeout(async () => {
+          try {
+            const response = await fetch('/api/auth/session');
+            const session = await response.json();
+            const userRole = session?.user?.role || '';
+
+            // Redirect based on role
+            if (userRole === 'petugas' || userRole === 'admin') {
+              router.push("/petugas/home");
+            } else {
+              router.push("/home");
+            }
+            router.refresh();
+          } catch (error) {
+            // Fallback to default home if session check fails
+            router.push("/home");
+            router.refresh();
+          }
+        }, 100);
       }
     } catch (error) {
       alert("An error occurred during login.");
-    } finally {
       setIsLoading(false);
     }
   }

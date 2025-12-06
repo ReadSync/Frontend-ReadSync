@@ -30,7 +30,7 @@ export const userData = async (formData: FormData) => {
     }
 
     if (!/^\d+$/.test(nisn)) {
-      return { error: "NISN harus berupa angka" };
+      return { error: "NISN must be a number" };
     }
 
     const finalClassId = classId && classId !== "" ? parseInt(classId as string) : null;
@@ -44,7 +44,7 @@ export const userData = async (formData: FormData) => {
     console.error("Register error details:", error);
 
     if (error.code === 'ER_DUP_ENTRY') {
-      return { error: "NISN sudah terdaftar" };
+      return { error: "NISN already registered" };
     }
 
     return { error: "Error during registration" };
@@ -137,7 +137,21 @@ export default async function loginUser(formData: FormData) {
 export async function getUserByEmail(email: string) {
   try {
     const [getUserByEmailrows]: any = await connection.execute(
-      "SELECT id, nisn, name, password, role, class_id, major_id, email FROM users WHERE email = ?",
+      `SELECT
+        u.id,
+        u.nisn,
+        u.name,
+        u.password,
+        u.role,
+        u.class_id,
+        u.major_id,
+        u.email,
+        c.kelas as class_name,
+        m.name as major_name
+      FROM users u
+      LEFT JOIN class c ON u.class_id = c.id
+      LEFT JOIN majors m ON u.major_id = m.id
+      WHERE u.email = ?`,
       [email]
     );
 
@@ -213,7 +227,7 @@ export async function createBorrow(bookId: number) {
     if (!session || !session.user || !session.user.id) {
       return {
         success: false,
-        error: 'Silakan login terlebih dahulu'
+        error: 'Please login first'
       };
     }
 
@@ -222,7 +236,7 @@ export async function createBorrow(bookId: number) {
     if (!userId) {
       return {
         success: false,
-        error: 'User ID tidak ditemukan'
+        error: 'User ID not found'
       };
     }
 
@@ -237,7 +251,7 @@ export async function createBorrow(bookId: number) {
     if (bookRows.length === 0) {
       return {
         success: false,
-        error: 'Buku tidak ditemukan'
+        error: 'Book not found'
       };
     }
 
@@ -246,7 +260,7 @@ export async function createBorrow(bookId: number) {
     if (book.available_quantity <= 0) {
       return {
         success: false,
-        error: `Buku "${book.title}" sedang tidak tersedia`
+        error: `Book "${book.title}" is currently unavailable`
       };
     }
 
@@ -261,7 +275,7 @@ export async function createBorrow(bookId: number) {
     if (existingBorrow.length > 0) {
       return {
         success: false,
-        error: 'Anda sudah meminjam buku ini dan belum mengembalikannya'
+        error: 'You have already borrowed this book and have not returned it'
       };
     }
 
@@ -293,7 +307,7 @@ export async function createBorrow(bookId: number) {
 
     return {
       success: true,
-      message: 'Permintaan peminjaman berhasil diajukan. Menunggu persetujuan admin.',
+      message: 'Borrow request submitted successfully. Waiting for admin approval.',
       data: newBorrow[0]
     };
 
@@ -301,7 +315,7 @@ export async function createBorrow(bookId: number) {
     console.error('❌ [ACTION] Error creating borrow:', error);
     return {
       success: false,
-      error: error.message || 'Terjadi kesalahan server'
+      error: error.message || 'Server error occurred'
     };
   }
 }
@@ -317,7 +331,7 @@ export async function getUserBorrows() {
     if (!user) {
       return {
         success: false,
-        error: 'Silakan login terlebih dahulu'
+        error: 'Please login first'
       };
     }
 
@@ -326,7 +340,7 @@ export async function getUserBorrows() {
     if (!userId) {
       return {
         success: false,
-        error: 'User ID tidak ditemukan'
+        error: 'User ID not found'
       };
     }
 
@@ -346,6 +360,7 @@ export async function getUserBorrows() {
         bk.author as book_author,
         bk.category_name as book_category,
         bk.book_code,
+        bk.cover_image,
         u.name as user_name
        FROM borrows b
        JOIN books bk ON b.book_id = bk.id
@@ -390,7 +405,7 @@ export async function getBookDetail(bookId: number) {
     if (books.length === 0) {
       return {
         success: false,
-        error: 'Buku tidak ditemukan'
+        error: 'Book not found'
       };
     }
 
@@ -405,7 +420,7 @@ export async function getBookDetail(bookId: number) {
     console.error('❌ [ACTION] Error getting book detail:', error);
     return {
       success: false,
-      error: error.message || 'Terjadi kesalahan server'
+      error: error.message || 'Server error occurred'
     };
   }
 }
@@ -418,13 +433,13 @@ export async function cancelBorrow(borrowId: number) {
     if (!user) {
       return {
         success: false,
-        error: 'Silakan login terlebih dahulu'
+        error: 'Please login first'
       };
     }
 
     const userId = user.id;
 
-    // 1. Cek apakah borrow milik user ini
+    // 1. Check if borrow belongs to this user
     const [borrowRows]: any = await connection.execute(
       `SELECT b.*, bk.id as book_id
        FROM borrows b
@@ -436,17 +451,17 @@ export async function cancelBorrow(borrowId: number) {
     if (borrowRows.length === 0) {
       return {
         success: false,
-        error: 'Peminjaman tidak ditemukan atau bukan milik Anda'
+        error: 'Borrow not found or does not belong to you'
       };
     }
 
     const borrow = borrowRows[0];
 
-    // 2. Hanya bisa cancel jika status masih 'pending'
+    // 2. Can only cancel if status is still 'pending'
     if (borrow.status !== 'pending') {
       return {
         success: false,
-        error: `Tidak dapat membatalkan peminjaman dengan status "${borrow.status}"`
+        error: `Cannot cancel borrow with status "${borrow.status}"`
       };
     }
 
@@ -454,13 +469,13 @@ export async function cancelBorrow(borrowId: number) {
     await connection.execute('START TRANSACTION');
 
     try {
-      // 4. Update status menjadi 'cancelled'
+      // 4. Update status to 'cancelled'
       await connection.execute(
-        `UPDATE borrows SET status = 'cancelled', notes = 'Dibatalkan oleh user' WHERE id = ?`,
+        `UPDATE borrows SET status = 'cancelled', notes = 'Cancelled by user' WHERE id = ?`,
         [borrowId]
       );
 
-      // 5. Tambah kembali stok buku
+      // 5. Add back book stock
       await connection.execute(
         "UPDATE books SET available_quantity = available_quantity + 1 WHERE id = ?",
         [borrow.book_id]
@@ -471,7 +486,7 @@ export async function cancelBorrow(borrowId: number) {
 
       return {
         success: true,
-        message: 'Peminjaman berhasil dibatalkan'
+        message: 'Borrow cancelled successfully'
       };
 
     } catch (error) {
@@ -484,7 +499,7 @@ export async function cancelBorrow(borrowId: number) {
     console.error('❌ [ACTION] Error cancelling borrow:', error);
     return {
       success: false,
-      error: error.message || 'Terjadi kesalahan server'
+      error: error.message || 'Server error occurred'
     };
   }
 }
@@ -497,13 +512,13 @@ export async function extendBorrow(borrowId: number, days: number = 7) {
     if (!user) {
       return {
         success: false,
-        error: 'Silakan login terlebih dahulu'
+        error: 'Please login first'
       };
     }
 
     const userId = user.id;
 
-    // 1. Cek apakah borrow milik user ini
+    // 1. Check if borrow belongs to this user
     const [borrowRows]: any = await connection.execute(
       "SELECT * FROM borrows WHERE id = ? AND user_id = ?",
       [borrowId, userId]
@@ -512,21 +527,21 @@ export async function extendBorrow(borrowId: number, days: number = 7) {
     if (borrowRows.length === 0) {
       return {
         success: false,
-        error: 'Peminjaman tidak ditemukan atau bukan milik Anda'
+        error: 'Borrow not found or does not belong to you'
       };
     }
 
     const borrow = borrowRows[0];
 
-    // 2. Hanya bisa extend jika status 'approved'
+    // 2. Can only extend if status is 'approved'
     if (borrow.status !== 'approved') {
       return {
         success: false,
-        error: `Hanya dapat memperpanjang peminjaman dengan status "approved"`
+        error: `Can only extend borrow with status "approved"`
       };
     }
 
-    // 3. Hitung due_date baru
+    // 3. Calculate new due_date
     const currentDueDate = new Date(borrow.due_date);
     const newDueDate = new Date(currentDueDate);
     newDueDate.setDate(newDueDate.getDate() + days);
@@ -539,7 +554,7 @@ export async function extendBorrow(borrowId: number, days: number = 7) {
 
     return {
       success: true,
-      message: `Peminjaman berhasil diperpanjang ${days} hari`,
+      message: `Borrow extended successfully by ${days} day${days > 1 ? 's' : ''}`,
       data: {
         new_due_date: newDueDate
       }
@@ -549,7 +564,7 @@ export async function extendBorrow(borrowId: number, days: number = 7) {
     console.error('❌ [ACTION] Error extending borrow:', error);
     return {
       success: false,
-      error: error.message || 'Terjadi kesalahan server'
+      error: error.message || 'Server error occurred'
     };
   }
 }
@@ -580,7 +595,7 @@ export async function getAllBooks() {
     console.error('❌ [ACTION] Error getting books:', error);
     return {
       success: false,
-      error: error.message || 'Terjadi kesalahan server'
+      error: error.message || 'Server error occurred'
     };
   }
 }

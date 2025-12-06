@@ -12,6 +12,8 @@ declare module "next-auth" {
     major?: string;
     class_id?: number;
     major_id?: number;
+    class_name?: string;
+    major_name?: string;
   }
 
   interface Session {
@@ -25,6 +27,8 @@ declare module "next-auth" {
       major?: string;
       class_id?: number;
       major_id?: number;
+      class_name?: string;
+      major_name?: string;
     }
   }
 }
@@ -40,5 +44,7 @@ declare module "next-auth/jwt" {
     major?: string;
     class_id?: number;
     major_id?: number;
+    class_name?: string;
+    major_name?: string;
   }
 }
